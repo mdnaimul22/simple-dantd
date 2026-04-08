@@ -50,18 +50,6 @@ cd simple-dantd
 sudo bash setup.sh
 ```
 
-The setup script handles everything automatically:
-
-| Step | What it does |
-|---|---|
-| Installs `dante-server` + `curl` | via `apt` |
-| Creates `danteproxy` system group | for proxy users |
-| Binds loopback alias `127.0.0.50` | active immediately on `lo` |
-| Persists alias across reboots | installs `lo-alias.service` (systemd oneshot) |
-| Creates Python virtualenv | `.venv` with all pip dependencies |
-| Copies `.env.example` → `.env` | only if `.env` does not yet exist |
-| Installs `simple-dantd.service` | UI starts automatically on every boot |
-
 After setup, start the service:
 
 ```bash
