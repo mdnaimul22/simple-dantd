@@ -2,19 +2,16 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Deployment Results - Dante Proxy</title>
+  <title>Deployment Results — Simple DantD</title>
   <link rel="stylesheet" href="/static/style.css">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="Dante SOCKS5 proxy deployment results and connectivity test status">
 </head>
 <body>
-  <div class="bg-orbs">
-    <div class="orb orb-1"></div>
-    <div class="orb orb-2"></div>
-  </div>
+  <div class="bg-orbs"><div class="orb orb-1"></div><div class="orb orb-2"></div></div>
 
   <div class="container">
-    <h1>Deployment Status</h1>
+    <h1>Deployment Results</h1>
 
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
@@ -26,50 +23,158 @@
       {% endif %}
     {% endwith %}
 
-    <div class="glass-card">
-      <div class="card-header">
-        <h2>Test Results <span class="muted">{{ host }}:{{ port }}</span></h2>
-        <a href="/" class="link">← Back to Dashboard</a>
+    <div class="glass-card topbar">
+      <span class="mono muted">PROXY · {{ host }}:{{ port }}</span>
+      <div style="display:flex;gap:12px;align-items:center;">
+        <a href="/result" class="link" id="refreshLink">Refresh</a>
+        <a href="/" class="link" id="backLink">← Dashboard</a>
+      </div>
+    </div>
+
+    <div class="glass-card" style="margin-top:12px;">
+
+      <div class="table-toolbar" style="margin-bottom:10px;">
+        <h2>Connectivity Tests
+          <span class="muted" style="font-weight:400;font-size:0.8rem;">
+            — tested via socks5h://user:pass@{{ host }}:{{ port }}
+          </span>
+        </h2>
+        <button class="cyber-button primary" id="retestAllBtn" onclick="retestAll()" {% if not results %}disabled{% endif %}>
+          Re-Test All
+        </button>
       </div>
 
       <div class="table-wrapper">
-        <table>
+        <table id="resultsTable">
           <thead>
             <tr>
               <th>User</th>
+              <th>Subnet</th>
               <th>Status</th>
               <th>Output</th>
+              <th style="width:80px;">Action</th>
             </tr>
           </thead>
           <tbody>
             {% for res in results %}
-            <tr>
-              <td class="mono">{{ res.user }}</td>
+            {% set r = res if res is mapping else res %}
+            <tr id="row-{{ loop.index0 }}">
+              <td class="mono" style="font-size:0.82rem;">
+                {{ res['user'] if res is mapping else res.user }}
+              </td>
+              <td class="mono muted" style="font-size:0.75rem;">
+                {{ res['subnet'] if res is mapping else res.subnet }}
+              </td>
               <td>
-                <span class="badge {{ 'ok' if res.ok else 'fail' }}">
-                  {{ 'PASS' if res.ok else 'FAIL' }}
+                {% set ok_val = res['ok'] if res is mapping else res.ok %}
+                <span class="badge {{ 'ok' if ok_val else 'fail' }}" id="badge-{{ loop.index0 }}">
+                  {{ 'PASS' if ok_val else 'FAIL' }}
                 </span>
               </td>
-              <td class="{% if res.ok %}text-green{% else %}text-red{% endif %}">
-                {{ res.output }}
+              <td style="max-width:200px;">
+                {% set out_val = res['output'] if res is mapping else res.output %}
+                {% set ok_val2 = res['ok'] if res is mapping else res.ok %}
+                <span class="{{ 'text-green' if ok_val2 else 'text-red' }}" id="output-{{ loop.index0 }}"
+                      style="font-family:var(--mono);font-size:0.78rem;word-break:break-all;">
+                  {% if ok_val2 %}
+                    Connected — {{ out_val }}
+                  {% else %}
+                    {{ out_val | truncate(80) }}
+                  {% endif %}
+                </span>
+              </td>
+              <td>
+                {% set u = res['user'] if res is mapping else res.user %}
+                {% set p = res['password'] if res is mapping else res.password %}
+                <button
+                  class="cyber-button"
+                  style="font-size:0.75rem;padding:4px 10px;"
+                  id="retestBtn-{{ loop.index0 }}"
+                  onclick="retestUser({{ loop.index0 }}, '{{ u }}', '{{ p }}', '{{ host }}', {{ port }})">
+                  Test
+                </button>
               </td>
             </tr>
             {% endfor %}
             {% if not results %}
             <tr>
-              <td colspan="3" class="empty-state">No proxy connectivity tests ran.</td>
+              <td colspan="5" class="empty-state">No proxy users were tested.</td>
             </tr>
             {% endif %}
           </tbody>
         </table>
       </div>
 
-      <div class="card-footer">
-        <a href="/" style="text-decoration: none;">
-          <button class="cyber-button primary" id="acknowledgeBtn">← Back to Dashboard</button>
-        </a>
+      <!-- Proxy connect string for manual use -->
+      {% if results %}
+      <div style="margin-top:14px;padding:10px 14px;background:rgba(0,0,0,0.25);border-radius:8px;border:1px solid rgba(255,255,255,0.05);">
+        <div style="font-size:0.68rem;text-transform:uppercase;letter-spacing:0.8px;color:var(--muted);margin-bottom:6px;font-family:var(--mono);">Manual curl test command</div>
+        <div class="mono muted" style="font-size:0.73rem;word-break:break-all;">
+          curl -sS -x socks5h://USER:PASS@{{ host }}:{{ port }} https://api.ipify.org
+        </div>
+      </div>
+      {% endif %}
+
+      <div class="card-footer" style="justify-content:flex-end;">
+        <a href="/" style="text-decoration:none;"><button class="cyber-button" id="backBtn">← Dashboard</button></a>
       </div>
     </div>
   </div>
+
+  <script>
+    const RESULTS = {{ results_json | safe }};
+    const HOST    = "{{ host }}";
+    const PORT    = {{ port }};
+
+    function setRowTesting(idx) {
+      const badge = document.getElementById(`badge-${idx}`);
+      const btn   = document.getElementById(`retestBtn-${idx}`);
+      const out   = document.getElementById(`output-${idx}`);
+      badge.className   = 'badge';
+      badge.textContent = '…';
+      btn.disabled  = true;
+      btn.innerHTML = '<span class="spinner" style="width:12px;height:12px;border-width:2px;"></span>';
+      out.textContent = 'Testing…';
+      out.className   = 'muted';
+    }
+
+    function setRowResult(idx, ok, output) {
+      const badge = document.getElementById(`badge-${idx}`);
+      const out   = document.getElementById(`output-${idx}`);
+      const btn   = document.getElementById(`retestBtn-${idx}`);
+      badge.className   = `badge ${ok ? 'ok' : 'fail'}`;
+      badge.textContent = ok ? 'PASS' : 'FAIL';
+      out.className     = ok ? 'text-green' : 'text-red';
+      out.style.fontFamily  = 'var(--mono)';
+      out.style.fontSize    = '0.78rem';
+      out.textContent   = ok ? `Connected — ${output}` : output;
+      btn.disabled  = false;
+      btn.innerHTML = 'Test';
+    }
+
+    async function retestUser(idx, user, password, host, port) {
+      setRowTesting(idx);
+      try {
+        const res  = await fetch('/api/test-user', {
+          method:  'POST',
+          headers: {'Content-Type': 'application/json'},
+          body:    JSON.stringify({user, password, host, port}),
+        });
+        const data = await res.json();
+        setRowResult(idx, data.ok, data.output);
+      } catch(e) {
+        setRowResult(idx, false, 'Request failed: ' + e.message);
+      }
+    }
+
+    async function retestAll() {
+      const btn = document.getElementById('retestAllBtn');
+      btn.disabled  = true;
+      btn.innerHTML = '<span class="spinner"></span> Testing…';
+      await Promise.all(RESULTS.map((r, idx) => retestUser(idx, r.user, r.password, HOST, PORT)));
+      btn.disabled  = false;
+      btn.innerHTML = 'Re-Test All';
+    }
+  </script>
 </body>
 </html>

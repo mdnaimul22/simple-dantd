@@ -10,13 +10,19 @@
 <body>
   <div class="bg-orbs"><div class="orb orb-1"></div><div class="orb orb-2"></div></div>
 
+  <!-- Global subnet portal (appended to body to avoid overflow:hidden clipping) -->
+  <div id="subnetPortal" class="subnet-dropdown-menu" style="display:none;position:fixed;z-index:99999;"></div>
+
   <div class="container">
-    <h1>🌐 Dante SOCKS5 Manager</h1>
+    <h1>Dante SOCKS5 Manager</h1>
 
     <!-- Topbar -->
     <div class="glass-card topbar">
       <span class="mono muted">SYSTEM · ONLINE</span>
-      <a href="/logout" class="link" id="logoutLink">Logout [X]</a>
+      <div style="display:flex;gap:12px;align-items:center;">
+        <a href="/setup" class="link" id="setupLink">Setup</a>
+        <a href="/logout" class="link" id="logoutLink">Logout [X]</a>
+      </div>
     </div>
 
     <!-- Flash messages -->
@@ -59,8 +65,17 @@
               {% for entry in entries %}
               <tr>
                 <td class="row-index">{{ loop.index }}</td>
-                <td><input name="row[{{ loop.index }}][ip]"   value="{{ entry.subnet }}"   placeholder="e.g. 10.0.0.0/24"></td>
-                <td><input name="row[{{ loop.index }}][user]" value="{{ entry.user }}"     placeholder="username"></td>
+                <td>
+                  <div class="subnet-wrapper">
+                    <div class="subnet-input-row">
+                      <input name="row[{{ loop.index }}][ip]" value="{{ entry.subnet }}" placeholder="e.g. 10.0.0.0/24" autocomplete="off" class="subnet-text-input">
+                      {% if suggested_subnets %}
+                      <button type="button" class="subnet-arrow-btn" onclick="togglePortal(this)" title="Select subnet">&#9660;</button>
+                      {% endif %}
+                    </div>
+                  </div>
+                </td>
+                <td><input name="row[{{ loop.index }}][user]" value="{{ entry.user }}" placeholder="username"></td>
                 <td><input name="row[{{ loop.index }}][pass]" value="{{ entry.password }}" placeholder="password" type="password"></td>
                 <td><button type="button" class="cyber-button danger" onclick="deleteRow(this)">Delete</button></td>
               </tr>
@@ -86,32 +101,130 @@
   </div>
 
   <script>
+    // ── Subnet Portal Dropdown ────────────────────────────────────────
+    const SUBNETS = {{ suggested_subnets | tojson | safe }};
+    const portal  = document.getElementById('subnetPortal');
+    let   activeInput = null;
+
+    function escHtml(s) {
+      return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    (function initPortal() {
+      if (!SUBNETS || !SUBNETS.length) return;
+      let html = '<div class="subnet-dropdown-header">Quick Select Subnet</div>';
+      SUBNETS.forEach(item => {
+        // icon derived from type, not from label string
+        const isPublicAll = item.cidr === '0.0.0.0/0';
+        const isLocal     = item.label.includes('Local');
+        const icon = isPublicAll ? '&#127757;' : isLocal ? '&#127968;' : '&#127760;';
+        const cls  = isPublicAll ? 'public-all' : isLocal ? 'local' : '';
+        html += `<div class="subnet-option ${cls}" data-cidr="${escHtml(item.cidr)}">
+          <span class="subnet-option-icon">${icon}</span>
+          <span class="subnet-option-body">
+            <span class="subnet-option-cidr">${escHtml(item.cidr)}</span>
+            <span class="subnet-option-label">${escHtml(item.label)}</span>
+          </span>
+        </div>`;
+      });
+      portal.innerHTML = html;
+      portal.querySelectorAll('.subnet-option').forEach(opt => {
+        opt.addEventListener('click', e => {
+          e.stopPropagation();
+          pickSubnet(opt.dataset.cidr);
+        });
+      });
+    })();
+
+    function togglePortal(btn) {
+      const wrapper = btn.closest('.subnet-wrapper');
+      const input   = wrapper.querySelector('.subnet-text-input');
+      if (activeInput === input && portal.style.display !== 'none') {
+        closePortal(); return;
+      }
+      activeInput = input;
+      portal.style.display = 'block';
+      positionPortal(wrapper);
+    }
+
+    function positionPortal(wrapper) {
+      const rect    = wrapper.getBoundingClientRect();
+      const vw      = window.innerWidth;
+      const vh      = window.innerHeight;
+      const pw      = Math.min(Math.max(rect.width, 240), vw - 16); // at least 240px, never wider than viewport
+      const spaceBelow = vh - rect.bottom - 8;
+      const spaceAbove = rect.top - 8;
+
+      portal.style.width    = pw + 'px';
+      portal.style.maxHeight = Math.min(320, Math.max(spaceBelow, spaceAbove)) + 'px';
+
+      // Horizontal: align to wrapper left, but clamp so right edge stays in viewport
+      let left = rect.left;
+      if (left + pw > vw - 8) left = vw - pw - 8;
+      if (left < 8) left = 8;
+      portal.style.left = left + 'px';
+
+      // Vertical: prefer below, flip above if more space there
+      if (spaceBelow >= 100 || spaceBelow >= spaceAbove) {
+        portal.style.top    = (rect.bottom + 4) + 'px';
+        portal.style.bottom = '';
+      } else {
+        portal.style.top    = '';
+        portal.style.bottom = (vh - rect.top + 4) + 'px';
+      }
+    }
+
+    function pickSubnet(cidr) {
+      if (activeInput) { activeInput.value = cidr; activeInput.dispatchEvent(new Event('input')); }
+      closePortal();
+    }
+
+    function closePortal() {
+      portal.style.display = 'none';
+      activeInput = null;
+    }
+
+    document.addEventListener('click', e => {
+      if (!e.target.closest('.subnet-wrapper') && !portal.contains(e.target)) closePortal();
+    });
+    window.addEventListener('scroll', () => { if (activeInput) positionPortal(activeInput.closest('.subnet-wrapper')); }, true);
+
+    // ── Row management ────────────────────────────────────────────────
     let rowCounter = {{ entries|length if entries else 0 }};
+
+    function makeSubnetCell(idx) {
+      const arrow = SUBNETS && SUBNETS.length
+        ? `<button type="button" class="subnet-arrow-btn" onclick="togglePortal(this)" title="Select subnet">&#9660;</button>`
+        : '';
+      return `<div class="subnet-wrapper"><div class="subnet-input-row">
+        <input name="row[${idx}][ip]" placeholder="e.g. 10.0.0.0/24" autocomplete="off" class="subnet-text-input">
+        ${arrow}
+      </div></div>`;
+    }
 
     function renumber() {
       document.querySelectorAll('#rowsBody tr:not(#emptyStateRow)').forEach((tr, i) => {
         const idx = i + 1;
         tr.querySelector('.row-index').textContent = idx;
         tr.querySelectorAll('input').forEach(inp => {
-          const field = inp.name.includes('[user]') ? 'user' : inp.name.includes('[pass]') ? 'pass' : 'ip';
-          inp.name = `row[${idx}][${field}]`;
+          const f = inp.name.includes('[user]') ? 'user' : inp.name.includes('[pass]') ? 'pass' : 'ip';
+          inp.name = `row[${idx}][${f}]`;
         });
       });
     }
 
     function addRow() {
-      const body = document.getElementById('rowsBody');
+      const body  = document.getElementById('rowsBody');
       const empty = document.getElementById('emptyStateRow');
       if (empty) empty.remove();
       rowCounter++;
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td class="row-index">${rowCounter}</td>
-        <td><input name="row[${rowCounter}][ip]"   placeholder="e.g. 10.0.0.0/24"></td>
+        <td>${makeSubnetCell(rowCounter)}</td>
         <td><input name="row[${rowCounter}][user]" placeholder="username"></td>
         <td><input name="row[${rowCounter}][pass]" placeholder="password" type="password"></td>
-        <td><button type="button" class="cyber-button danger" onclick="deleteRow(this)">Delete</button></td>
-      `;
+        <td><button type="button" class="cyber-button danger" onclick="deleteRow(this)">Delete</button></td>`;
       body.appendChild(tr);
       renumber();
       tr.querySelector('input').focus();
@@ -138,6 +251,7 @@
     // Form submit → sudo modal
     document.getElementById('mainForm').addEventListener('submit', e => {
       e.preventDefault();
+      closePortal();
       showSudoModal(() => {
         const btn = document.getElementById('saveBtn');
         btn.innerHTML = '<span class="spinner"></span> Deploying…';
@@ -162,13 +276,10 @@
             <button class="cyber-button" id="cancelModalBtn">Cancel</button>
             <button class="cyber-button primary" id="confirmModalBtn">Confirm →</button>
           </div>
-        </div>
-      `;
+        </div>`;
       document.body.appendChild(overlay);
-
       const pwdInput = overlay.querySelector('#modalPassword');
       setTimeout(() => pwdInput.focus(), 80);
-
       const confirm = () => {
         const pwd = pwdInput.value.trim();
         if (!pwd) return;
@@ -178,13 +289,11 @@
         document.body.removeChild(overlay);
         onConfirm();
       };
-
       overlay.querySelector('#confirmModalBtn').onclick = confirm;
       overlay.querySelector('#cancelModalBtn').onclick  = () => document.body.removeChild(overlay);
       pwdInput.addEventListener('keypress', e => { if (e.key === 'Enter') { e.preventDefault(); confirm(); } });
     }
 
-    // Keyboard shortcuts
     document.addEventListener('keydown', e => {
       if (e.ctrlKey && e.key === 'n') { e.preventDefault(); addRow(); }
     });

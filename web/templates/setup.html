@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Setup — Simple DantD</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="/static/style.css">
+  <style>
+    /* ── Compact setup styles ── */
+    .setup-grid { display: flex; flex-direction: column; gap: 5px; }
+
+    .step-row {
+      display: grid;
+      grid-template-columns: 28px 1fr auto;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.04);
+      background: rgba(255,255,255,0.015);
+      transition: background 0.2s;
+    }
+    .step-row.is-ok   { border-color: rgba(0,255,136,0.12); background: rgba(0,255,136,0.025); }
+    .step-row.is-fail { border-color: rgba(255,0,85,0.15);  background: rgba(255,0,85,0.025); }
+
+    .step-dot {
+      width: 28px; height: 28px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.75rem; font-weight: 700; font-family: var(--mono);
+      border: 1.5px solid rgba(255,255,255,0.1);
+      background: rgba(255,255,255,0.04);
+      color: var(--muted);
+      flex-shrink: 0;
+    }
+    .is-ok   .step-dot { border-color: var(--green); background: rgba(0,255,136,0.1);  color: var(--green); }
+    .is-fail .step-dot { border-color: var(--red);   background: rgba(255,0,85,0.1);   color: var(--red); }
+
+    .step-info { min-width: 0; }
+    .step-name { font-size: 0.82rem; font-weight: 600; line-height: 1.2; }
+    .step-detail {
+      font-family: var(--mono);
+      font-size: 0.68rem;
+      color: var(--muted);
+      margin-top: 2px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .is-ok .step-detail   { color: rgba(0,255,136,0.7); }
+    .is-fail .step-detail { color: rgba(255,80,120,0.85); }
+
+    .step-badge {
+      font-size: 0.62rem; font-family: var(--mono); font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.8px;
+      padding: 2px 7px; border-radius: 4px; flex-shrink: 0;
+    }
+    .badge-ok   { background: rgba(0,255,136,0.1); color: var(--green); border: 1px solid rgba(0,255,136,0.2); }
+    .badge-fail { background: rgba(255,0,85,0.1);  color: var(--red);   border: 1px solid rgba(255,0,85,0.2); }
+    .badge-wait { background: rgba(255,255,255,0.05); color: var(--muted); border: 1px solid rgba(255,255,255,0.08); }
+
+    .summary-row {
+      display: flex; align-items: center; gap: 14px;
+      padding: 10px 14px; border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.06);
+      background: rgba(255,255,255,0.02);
+      margin-bottom: 12px;
+    }
+    .summary-stat { text-align: center; }
+    .summary-stat .n { font-size: 1.3rem; font-weight: 700; font-family: var(--mono); line-height: 1; }
+    .summary-stat .l { font-size: 0.62rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.6px; }
+    .n.pass { color: var(--green); } .n.fail { color: var(--red); } .n.tot { color: var(--cyan); }
+    .progress-bar { flex: 1; height: 5px; background: rgba(255,255,255,0.07); border-radius: 99px; overflow: hidden; }
+    .progress-fill { height: 100%; border-radius: 99px; transition: width 0.5s cubic-bezier(.4,0,.2,1); background: linear-gradient(90deg, var(--green), #00c97a); }
+  </style>
+</head>
+<body>
+  <div class="bg-orbs"><div class="orb orb-1"></div><div class="orb orb-2"></div></div>
+  <div class="container">
+    <h1>System Setup</h1>
+    <div class="glass-card topbar">
+      <span class="mono muted">SETUP · DIAGNOSTICS</span>
+      <a href="/" class="link" id="backLink">← Dashboard</a>
+    </div>
+
+    <div class="glass-card" style="margin-top:10px;">
+
+      <!-- Summary -->
+      <div class="summary-row" id="summaryRow">
+        <div class="summary-stat"><div class="n pass" id="passCount">—</div><div class="l">Passed</div></div>
+        <div class="summary-stat"><div class="n fail" id="failCount">—</div><div class="l">Failed</div></div>
+        <div class="summary-stat"><div class="n tot" id="totalCount">8</div><div class="l">Total</div></div>
+        <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+      </div>
+
+      <!-- Step rows -->
+      <div class="setup-grid" id="stepsList"></div>
+
+      <div class="card-footer" style="justify-content:flex-end;margin-top:12px;">
+        <button class="cyber-button primary" onclick="runCheck()" id="recheckBtn">Re-check</button>
+        <a href="/" style="text-decoration:none;"><button class="cyber-button" id="goHome">← Dashboard</button></a>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const STEPS = [
+      { key: 'dante_installed', name: 'dante-server',         icon: 'D' },
+      { key: 'curl_installed',  name: 'curl',                 icon: 'C' },
+      { key: 'group_exists',    name: 'danteproxy group',     icon: 'G' },
+      { key: 'lo_alias',        name: 'Loopback alias',       icon: 'L' },
+      { key: 'lo_service',      name: 'lo-alias.service',     icon: 'S' },
+      { key: 'dantd_service',   name: 'simple-dantd.service', icon: 'U' },
+      { key: 'venv_ready',      name: 'Python virtualenv',    icon: 'V' },
+      { key: 'env_file',        name: '.env config',          icon: 'E' },
+    ];
+
+    function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+    function renderLoading() {
+      return STEPS.map(s => `
+        <div class="step-row" id="sr-${s.key}">
+          <div class="step-dot"><span class="spinner" style="width:12px;height:12px;border-width:1.5px;"></span></div>
+          <div class="step-info"><div class="step-name">${s.name}</div></div>
+          <span class="step-badge badge-wait">…</span>
+        </div>`).join('');
+    }
+
+    function renderStep(s, ok, detail) {
+      const cls  = ok ? 'is-ok' : 'is-fail';
+      const icon = ok ? '✓' : '✗';
+      const bdg  = ok
+        ? '<span class="step-badge badge-ok">OK</span>'
+        : '<span class="step-badge badge-fail">FAIL</span>';
+      return `
+        <div class="step-row ${cls}" id="sr-${s.key}">
+          <div class="step-dot">${icon}</div>
+          <div class="step-info">
+            <div class="step-name">${s.name}</div>
+            ${detail ? `<div class="step-detail" title="${esc(detail)}">${esc(detail)}</div>` : ''}
+          </div>
+          ${bdg}
+        </div>`;
+    }
+
+    async function runCheck() {
+      const list    = document.getElementById('stepsList');
+      const btn     = document.getElementById('recheckBtn');
+      const passEl  = document.getElementById('passCount');
+      const failEl  = document.getElementById('failCount');
+      const fillEl  = document.getElementById('progressFill');
+
+      list.innerHTML = renderLoading();
+      passEl.textContent = '—'; failEl.textContent = '—';
+      fillEl.style.width = '0%';
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span>';
+
+      try {
+        const res  = await fetch('/api/setup-status');
+        const data = await res.json();
+        let passed = 0, html = '';
+        STEPS.forEach(s => {
+          const r = data[s.key] || {};
+          if (r.ok) passed++;
+          html += renderStep(s, r.ok, r.detail || '');
+        });
+        list.innerHTML = html;
+        const total = STEPS.length;
+        passEl.textContent = passed;
+        failEl.textContent = total - passed;
+        fillEl.style.width  = Math.round((passed / total) * 100) + '%';
+        fillEl.style.background = passed === total
+          ? 'linear-gradient(90deg, var(--green), #00c97a)'
+          : 'linear-gradient(90deg, #ff6030, #ffaa00)';
+      } catch(e) {
+        list.innerHTML = `<div class="step-row is-fail">
+          <div class="step-dot">!</div>
+          <div class="step-info"><div class="step-name">Error fetching status</div>
+            <div class="step-detail">${esc(e.message)}</div></div>
+          <span class="step-badge badge-fail">ERR</span></div>`;
+      }
+      btn.disabled = false;
+      btn.innerHTML = 'Re-check';
+    }
+
+    runCheck();
+  </script>
+</body>
+</html>

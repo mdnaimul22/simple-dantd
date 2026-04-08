@@ -1,6 +1,7 @@
 import asyncio
 import os
 import re
+import ipaddress
 from typing import Tuple
 
 # Detect at import time whether sudo is usable on this system.
@@ -85,6 +86,35 @@ async def primary_ip_for_iface(iface: str) -> str:
     ret, stdout, _ = await run_cmd_async(f"ip -4 -o addr show dev {iface} scope global | awk '{{print $4}}' | cut -d/ -f1 | head -n1")
     return stdout.strip()
 
+async def get_system_subnets() -> list[dict]:
+    """Detect active IPv4 subnets and return as list of {cidr, label} dicts.
+
+    Always prepends 0.0.0.0/0 so the user can quickly grant public access.
+    Labels use plain text; the UI renders colour/icon based on type.
+    Returns plain dicts so Jinja2 templates and json.dumps work directly.
+    """
+    from src.schema import SubnetSuggestion
+
+    _, stdout, _ = await run_cmd_async("ip -o -f inet addr show | awk '{print $4}'")
+    subnets: list[SubnetSuggestion] = [
+        SubnetSuggestion(cidr="0.0.0.0/0", label="Allow Public access")
+    ]
+    seen: set[str] = set()
+    for line in stdout.strip().split():
+        if not line:
+            continue
+        try:
+            net = ipaddress.IPv4Interface(line).network
+            if net.prefixlen < 32 and not net.is_loopback:
+                cidr = str(net)
+                if cidr not in seen:
+                    seen.add(cidr)
+                    label = "Allow Local IP-Subnet" if net.is_private else "Allow IP-Subnet"
+                    subnets.append(SubnetSuggestion(cidr=cidr, label=label))
+        except ValueError:
+            pass
+    return [s.model_dump() for s in subnets]
+
 async def detect_public_ip() -> str:
     urls = [
         "https://ifconfig.me",
@@ -102,6 +132,30 @@ async def detect_public_ip() -> str:
 async def restart_danted(sudo_password: str = None) -> bool:
     ret, _, _ = await run_cmd_async("systemctl restart danted && systemctl is-active --quiet danted", require_root=True, sudo_password=sudo_password)
     return ret == 0
+
+
+def check_binary(name: str) -> tuple[bool, str]:
+    """Return (found, path_or_reason) for a binary in PATH.
+
+    Pure Python / no subprocess — suitable for synchronous calls inside
+    async services without blocking the event loop.
+    """
+    import shutil
+    path = shutil.which(name)
+    return (bool(path), path or f"{name} not found in PATH")
+
+
+def check_group(name: str) -> tuple[bool, str]:
+    """Return (exists, detail) for a POSIX system group.
+
+    Reads /etc/group via the standard library — no subprocess needed.
+    """
+    import grp as _grp
+    try:
+        _grp.getgrnam(name)
+        return (True, f"Group '{name}' exists")
+    except KeyError:
+        return (False, f"Group '{name}' not found — run setup.sh")
 
 async def test_user_socks5(username: str, password: str, host: str, port: int) -> Tuple[bool, str]:
     if not await cmd_exists("curl"):

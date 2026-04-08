@@ -32,7 +32,7 @@ async def deploy_configuration(entries_data: list[dict], sudo_password: str) -> 
     entries = [ProxyEntry(**e) for e in entries_data]
 
     # 1. Save State (works without root — stored locally)
-    if not await save_state(entries_data, sudo_password):
+    if not await save_state(entries_data):
         return False, "Failed to save state file", [], "", 0
 
     # 2. Early sudo check — fail fast with a clear message

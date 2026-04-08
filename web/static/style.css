@@ -342,8 +342,174 @@ tr td input:focus {
 @keyframes slideIn { from { opacity:0; transform: translateX(10px); } to { opacity:1; transform: translateX(0); } }
 @keyframes spin    { to   { transform: rotate(360deg); } }
 
-/* ─── Scrollbar ──────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: #000; }
 ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+
+/* ─── Custom Subnet Dropdown ─────────────────────────────────── */
+.subnet-wrapper {
+  position: relative;
+  width: 100%;
+}
+.subnet-input-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.subnet-input-row input {
+  flex: 1;
+  min-width: 0;
+  border-radius: 4px 0 0 4px !important;
+}
+.subnet-arrow-btn {
+  background: rgba(0,240,255,0.06);
+  border: 1px solid rgba(0,240,255,0.2);
+  border-left: none;
+  color: var(--cyan);
+  padding: 5px 9px;
+  cursor: pointer;
+  border-radius: 0 4px 4px 0;
+  font-size: 0.7rem;
+  line-height: 1;
+  transition: background 0.15s;
+  flex-shrink: 0;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+}
+.subnet-arrow-btn:hover { background: rgba(0,240,255,0.14); }
+
+/* Base menu style (shared by both portal and any inline use) */
+.subnet-dropdown-menu {
+  background: #13131a;
+  border: 1px solid rgba(0,240,255,0.22);
+  border-radius: 10px;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.7), 0 0 0 1px rgba(0,240,255,0.06);
+  overflow: hidden;
+  animation: fadeUp 0.13s ease;
+}
+
+/* Portal variant — positioned fixed relative to the viewport */
+#subnetPortal {
+  position: fixed;
+  z-index: 99999;
+  max-height: min(320px, 60vh);   /* never taller than 60% viewport */
+  overflow-y: auto;
+  /* width & top/left set dynamically by JS */
+}
+#subnetPortal::-webkit-scrollbar { width: 4px; }
+#subnetPortal::-webkit-scrollbar-thumb { background: rgba(0,240,255,0.2); border-radius: 2px; }
+
+.subnet-dropdown-header {
+  padding: 7px 12px;
+  font-size: 0.67rem;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--muted);
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  font-family: var(--mono);
+  position: sticky;
+  top: 0;
+  background: #13131a;   /* match menu bg so it stays readable when scrolling */
+  z-index: 1;
+}
+.subnet-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background 0.12s;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+}
+.subnet-option:last-child { border-bottom: none; }
+.subnet-option:hover { background: rgba(0,240,255,0.05); }
+.subnet-option-icon {
+  font-size: 0.95rem;
+  flex-shrink: 0;
+  width: 22px;
+  text-align: center;
+  line-height: 1;
+}
+.subnet-option-body { flex: 1; min-width: 0; }
+.subnet-option-cidr {
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  color: var(--cyan);
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.subnet-option-label {
+  font-size: 0.7rem;
+  color: var(--muted);
+  display: block;
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.subnet-option.public-all .subnet-option-cidr { color: #ff9500; }
+.subnet-option.public-all { background: rgba(255,149,0,0.03); }
+.subnet-option.public-all:hover { background: rgba(255,149,0,0.08); }
+.subnet-option.local .subnet-option-cidr { color: #7cd87c; }
+.subnet-option.local { background: rgba(124,216,124,0.02); }
+.subnet-option.local:hover { background: rgba(124,216,124,0.07); }
+
+/* ─── Setup Page ─────────────────────────────────────────────── */
+.setup-step {
+  display: flex;
+  gap: 14px;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  align-items: flex-start;
+}
+.setup-step:last-child { border-bottom: none; }
+.step-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-family: var(--mono);
+  font-weight: 700;
+  flex-shrink: 0;
+  border: 1.5px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.04);
+  color: var(--muted);
+}
+.step-icon.done  { border-color: var(--green); background: rgba(0,255,136,0.08); color: var(--green); }
+.step-icon.fail  { border-color: var(--red);   background: rgba(255,0,85,0.08);  color: var(--red); }
+.step-icon.spin-active { border-color: var(--cyan); background: rgba(0,240,255,0.06); color: var(--cyan); }
+.step-body { flex: 1; }
+.step-title { font-weight: 600; font-size: 0.88rem; color: var(--white); }
+.step-desc  { font-size: 0.78rem; color: var(--muted); margin-top: 2px; }
+.step-log   { font-family: var(--mono); font-size: 0.73rem; color: #00ff88; margin-top: 5px; white-space: pre-wrap; opacity: 0.8; }
+.step-log.err { color: var(--red); }
+
+/* ─── Result re-test button ──────────────────────────────────── */
+.cyber-button.success {
+  background: rgba(0,255,136,0.08);
+  border-color: rgba(0,255,136,0.4);
+  color: var(--green);
+}
+.cyber-button.success:hover {
+  background: rgba(0,255,136,0.15);
+  box-shadow: 0 0 12px rgba(0,255,136,0.25);
+}
+.test-inline-result {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  padding: 4px 10px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.test-inline-result.ok   { color: var(--green); background: rgba(0,255,136,0.06); }
+.test-inline-result.fail { color: var(--red);   background: rgba(255,0,85,0.06); }
+
