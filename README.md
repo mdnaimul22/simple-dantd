@@ -34,7 +34,7 @@ Configure subnets, manage Linux proxy users, write config, and test connectivity
 - 💾 **Persistent state** — configuration saved to `profiles_data/profiles.json`
 - 🎨 **Modern UI** — glassmorphic dark-mode interface, no scroll on desktop
 
-## Screenshot
+## Dashboard
 
 <div align="center">
   <img alt="Dante SOCKS5 Management Dashboard" src="docs/.asset/simple-dantd-dashboard.png" width="90%">
@@ -188,20 +188,6 @@ python -m pytest tests/ -v
 
 # Run the dev server with auto-reload
 uvicorn main:app --host 127.0.0.50 --port 7000 --reload
-```
-
-### Architecture
-
-The project follows **Clean Architecture** with a strict layered dependency model:
-
-```
-Config / Schema  ←  no local imports (foundation)
-    ↑
-Providers        ←  OS/external integrations only
-    ↑
-Services         ←  business logic, orchestrates providers
-    ↑
-API (routes)     ←  HTTP interface, calls services only
 ```
 
 ## API Reference
