@@ -32,7 +32,6 @@ Configure subnets, manage Linux proxy users, write config, and test connectivity
 - ⚙️ **Config deployment** — writes `/etc/danted.conf` and restarts `danted` via sudo
 - 🧪 **Built-in connectivity tests** — verifies each proxy user after deployment via `curl socks5h://`
 - 💾 **Persistent state** — configuration saved to `profiles_data/profiles.json`
-- 🎨 **Modern UI** — glassmorphic dark-mode interface, no scroll on desktop
 
 ## Dashboard
 
