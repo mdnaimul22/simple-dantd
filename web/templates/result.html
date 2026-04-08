@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Deployment Results - Dante Proxy</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Dante SOCKS5 proxy deployment results and connectivity test status">
+</head>
+<body>
+  <div class="bg-orbs">
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+  </div>
+
+  <div class="container">
+    <h1>Deployment Status</h1>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <ul class="flashes">
+          {% for category, message in messages %}
+            <li class="{{ category }}">{{ message }}</li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+    {% endwith %}
+
+    <div class="glass-card">
+      <div class="card-header">
+        <h2>Test Results <span class="muted">{{ host }}:{{ port }}</span></h2>
+        <a href="/" class="link">← Back to Dashboard</a>
+      </div>
+
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>User</th>
+              <th>Status</th>
+              <th>Output</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for res in results %}
+            <tr>
+              <td class="mono">{{ res.user }}</td>
+              <td>
+                <span class="badge {{ 'ok' if res.ok else 'fail' }}">
+                  {{ 'PASS' if res.ok else 'FAIL' }}
+                </span>
+              </td>
+              <td class="{% if res.ok %}text-green{% else %}text-red{% endif %}">
+                {{ res.output }}
+              </td>
+            </tr>
+            {% endfor %}
+            {% if not results %}
+            <tr>
+              <td colspan="3" class="empty-state">No proxy connectivity tests ran.</td>
+            </tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card-footer">
+        <a href="/" style="text-decoration: none;">
+          <button class="cyber-button primary" id="acknowledgeBtn">← Back to Dashboard</button>
+        </a>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Dante SOCKS5 Management</title>
+  <meta name="description" content="Dante SOCKS5 proxy configuration and user management dashboard">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="bg-orbs"><div class="orb orb-1"></div><div class="orb orb-2"></div></div>
+
+  <div class="container">
+    <h1>🌐 Dante SOCKS5 Manager</h1>
+
+    <!-- Topbar -->
+    <div class="glass-card topbar">
+      <span class="mono muted">SYSTEM · ONLINE</span>
+      <a href="/logout" class="link" id="logoutLink">Logout [X]</a>
+    </div>
+
+    <!-- Flash messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <ul class="flashes">
+          {% for category, message in messages %}
+            <li class="{{ category }}">{{ message }}</li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+    {% endwith %}
+
+    <!-- Main card -->
+    <div class="glass-card">
+      <form method="post" action="/save" id="mainForm">
+
+        <!-- Table toolbar -->
+        <div class="table-toolbar">
+          <h2>Proxy Configurations</h2>
+          <div class="table-toolbar-actions">
+            <button type="button" class="cyber-button primary" onclick="addRow()" id="addRowBtn">+ Add Row</button>
+            <button type="button" class="cyber-button" onclick="clearAll()" id="clearAllBtn">Clear All</button>
+          </div>
+        </div>
+
+        <!-- Table -->
+        <div class="table-wrapper">
+          <table id="rowsTable">
+            <thead>
+              <tr>
+                <th style="width:40px;">#</th>
+                <th>Subnet (CIDR)</th>
+                <th>Username</th>
+                <th>Password</th>
+                <th style="width:90px;">Action</th>
+              </tr>
+            </thead>
+            <tbody id="rowsBody">
+              {% for entry in entries %}
+              <tr>
+                <td class="row-index">{{ loop.index }}</td>
+                <td><input name="row[{{ loop.index }}][ip]"   value="{{ entry.subnet }}"   placeholder="e.g. 10.0.0.0/24"></td>
+                <td><input name="row[{{ loop.index }}][user]" value="{{ entry.user }}"     placeholder="username"></td>
+                <td><input name="row[{{ loop.index }}][pass]" value="{{ entry.password }}" placeholder="password" type="password"></td>
+                <td><button type="button" class="cyber-button danger" onclick="deleteRow(this)">Delete</button></td>
+              </tr>
+              {% endfor %}
+              {% if not entries %}
+              <tr id="emptyStateRow">
+                <td colspan="5" class="empty-state">No entries. Click <strong>+ Add Row</strong> to begin.</td>
+              </tr>
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Deploy -->
+        <div class="deploy-row">
+          <button type="submit" class="cyber-button primary" id="saveBtn">
+            Deploy Configuration →
+          </button>
+        </div>
+
+      </form>
+    </div>
+  </div>
+
+  <script>
+    let rowCounter = {{ entries|length if entries else 0 }};
+
+    function renumber() {
+      document.querySelectorAll('#rowsBody tr:not(#emptyStateRow)').forEach((tr, i) => {
+        const idx = i + 1;
+        tr.querySelector('.row-index').textContent = idx;
+        tr.querySelectorAll('input').forEach(inp => {
+          const field = inp.name.includes('[user]') ? 'user' : inp.name.includes('[pass]') ? 'pass' : 'ip';
+          inp.name = `row[${idx}][${field}]`;
+        });
+      });
+    }
+
+    function addRow() {
+      const body = document.getElementById('rowsBody');
+      const empty = document.getElementById('emptyStateRow');
+      if (empty) empty.remove();
+      rowCounter++;
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td class="row-index">${rowCounter}</td>
+        <td><input name="row[${rowCounter}][ip]"   placeholder="e.g. 10.0.0.0/24"></td>
+        <td><input name="row[${rowCounter}][user]" placeholder="username"></td>
+        <td><input name="row[${rowCounter}][pass]" placeholder="password" type="password"></td>
+        <td><button type="button" class="cyber-button danger" onclick="deleteRow(this)">Delete</button></td>
+      `;
+      body.appendChild(tr);
+      renumber();
+      tr.querySelector('input').focus();
+    }
+
+    function deleteRow(btn) {
+      btn.closest('tr').remove();
+      renumber();
+      const body = document.getElementById('rowsBody');
+      if (!body.querySelector('tr')) {
+        rowCounter = 0;
+        body.innerHTML = `<tr id="emptyStateRow"><td colspan="5" class="empty-state">No entries. Click <strong>+ Add Row</strong> to begin.</td></tr>`;
+      }
+    }
+
+    function clearAll() {
+      if (confirm('Clear all entries?')) {
+        rowCounter = 0;
+        document.getElementById('rowsBody').innerHTML = `
+          <tr id="emptyStateRow"><td colspan="5" class="empty-state">No entries. Click <strong>+ Add Row</strong> to begin.</td></tr>`;
+      }
+    }
+
+    // Form submit → sudo modal
+    document.getElementById('mainForm').addEventListener('submit', e => {
+      e.preventDefault();
+      showSudoModal(() => {
+        const btn = document.getElementById('saveBtn');
+        btn.innerHTML = '<span class="spinner"></span> Deploying…';
+        btn.disabled = true;
+        document.getElementById('mainForm').submit();
+      });
+    });
+
+    function showSudoModal(onConfirm) {
+      const overlay = document.createElement('div');
+      overlay.className = 'modal-overlay';
+      overlay.innerHTML = `
+        <div class="glass-card" style="width:90%;max-width:360px;">
+          <h2 style="margin-bottom:10px;">System Authentication</h2>
+          <p class="muted" style="margin-bottom:14px;line-height:1.5;">
+            Sudo password required to write config and restart Dante service.
+          </p>
+          <div class="form-group">
+            <input type="password" id="modalPassword" placeholder="sudo password">
+          </div>
+          <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">
+            <button class="cyber-button" id="cancelModalBtn">Cancel</button>
+            <button class="cyber-button primary" id="confirmModalBtn">Confirm →</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+
+      const pwdInput = overlay.querySelector('#modalPassword');
+      setTimeout(() => pwdInput.focus(), 80);
+
+      const confirm = () => {
+        const pwd = pwdInput.value.trim();
+        if (!pwd) return;
+        const h = document.createElement('input');
+        h.type = 'hidden'; h.name = 'sudo_password'; h.value = pwd;
+        document.getElementById('mainForm').appendChild(h);
+        document.body.removeChild(overlay);
+        onConfirm();
+      };
+
+      overlay.querySelector('#confirmModalBtn').onclick = confirm;
+      overlay.querySelector('#cancelModalBtn').onclick  = () => document.body.removeChild(overlay);
+      pwdInput.addEventListener('keypress', e => { if (e.key === 'Enter') { e.preventDefault(); confirm(); } });
+    }
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', e => {
+      if (e.ctrlKey && e.key === 'n') { e.preventDefault(); addRow(); }
+    });
+  </script>
+</body>
+</html>

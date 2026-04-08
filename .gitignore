@@ -1,5 +1,6 @@
 # Python virtual env
 .venv/
+venv/
 
 # Local environment variables
 .env
@@ -7,7 +8,20 @@
 # Python caches
 __pycache__/
 *.pyc
+*.pyo
 
-# OS files
+# Pytest / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Build artifacts
+*.egg-info/
+
+# Runtime data (auto-created, not versioned)
+profiles_data/
+
+# OS / IDE files
 .DS_Store
 Thumbs.db
+.agents/

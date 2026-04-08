@@ -2,133 +2,218 @@
 
 <h1>Simple DantD UI</h1>
 
-Manage your Dante SOCKS5 proxy with a clean, modern web interface.
+<p>A lightweight, modern web dashboard for managing your Dante SOCKS5 proxy server.<br>
+Configure subnets, manage Linux proxy users, write config, and test connectivity — all from the browser.</p>
 
 <p>
-  <a href="https://github.com/mdnaimul22/simple-dantd"><img alt="Repo" src="https://img.shields.io/badge/GitHub-simple--dantd-181717?logo=github"></a>
+  <a href="https://github.com/mdnaimul22/simple-dantd"><img alt="GitHub" src="https://img.shields.io/badge/GitHub-simple--dantd-181717?logo=github"></a>
   <img alt="Python" src="https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white">
-  <img alt="Flask" src="https://img.shields.io/badge/Flask-3.0-000000?logo=flask&logoColor=white">
+  <img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-0.110-009688?logo=fastapi&logoColor=white">
+  <img alt="Tests" src="https://img.shields.io/badge/Tests-9%20passed-2ea44f">
   <a href="./LICENSE"><img alt="License" src="https://img.shields.io/badge/License-MIT-2ea44f"></a>
 </p>
 
 <p>
   <a href="#quick-start">Quick Start</a> •
   <a href="#features">Features</a> •
-  <a href="#screenshots">Screenshots</a> •
-  <a href="#using-the-ui">Using the UI</a> •
-  <a href="#environment-variables">Env</a> •
+  <a href="#project-structure">Structure</a> •
+  <a href="#environment-variables">Config</a> •
+  <a href="#running-on-a-production-server">Production</a> •
   <a href="#development">Development</a>
 </p>
 
 </div>
 
-## Screenshots
-
-<div align="center">
-
-<img alt="Add new subnet" src="webui/.asset/add_new_subnet.png" width="85%" />
-
-<p/>
-
-<img alt="Subnet table" src="webui/.asset/subnet.png" width="85%" />
-
-<p/>
-
-<img alt="Deployment result" src="webui/.asset/result.png" width="85%" />
-
-</div>
-
 ## Features
 
-- 🔐 Admin login with username/password from `.env`
-- 🌐 Manage allowed client subnets
-- 👥 Create/update Linux users for Dante auth (group `danteproxy`)
-- ⚙️ Safely write `danted.conf` and restart the service
-- 🧪 Built-in connectivity test per user with ready-to-copy curl commands
-- 🧾 Persists UI state in `/etc/dante-ui.json`
+- 🔐 **Secure admin login** — credentials from `.env`, session-based auth
+- 🌐 **Subnet management** — add, edit, delete allowed client CIDR ranges
+- 👥 **Linux user management** — automatically creates/updates system users in group `danteproxy`
+- ⚙️ **Config deployment** — writes `/etc/danted.conf` and restarts `danted` via sudo
+- 🧪 **Built-in connectivity tests** — verifies each proxy user after deployment via `curl socks5h://`
+- 💾 **Persistent state** — configuration saved to `profiles_data/profiles.json`
+- 🎨 **Modern UI** — glassmorphic dark-mode interface, no scroll on desktop
+
+## Screenshot
+
+<div align="center">
+  <img alt="Dante SOCKS5 Management Dashboard" src="docs/.asset/simple-dantd-dashboard.png" width="90%">
+</div>
 
 ## Quick Start
 
-1) Clone the repo
+### 1 — Clone and set up environment
 
 ```bash
 git clone https://github.com/mdnaimul22/simple-dantd.git
 cd simple-dantd
+
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e ".[dev]"
 ```
 
-2) Create your `.env` and set admin credentials for the UI:
+### 2 — Configure
 
 ```bash
 cp .env.example .env
-# edit values
+# Edit .env — at minimum set a strong DANTE_UI_SECRET
+```
+
+`.env` reference:
+
+```ini
 ADMIN_USER=admin
 ADMIN_PASS=admin
+DANTE_UI_SECRET=change-me-in-production
+APP_HOST=127.0.0.50
+APP_PORT=7000
 ```
 
-3) Run the UI:
+### 3 — Bind the loopback alias (once per boot)
 
 ```bash
-bash ./run.sh
+sudo ip addr add 127.0.0.50/32 dev lo
 ```
 
-This will:
+To persist across reboots add a `systemd-networkd` or `/etc/rc.local` entry.
 
-- Ensure `127.0.0.50` is bound to loopback
-- Create and activate a virtualenv `.venv/`
-- Install dependencies
-- Start the Flask UI at http://127.0.0.50:7000
+### 4 — Run
 
-4) Login using the admin credentials you set in `.env`.
+```bash
+python main.py
+# or explicitly:
+uvicorn main:app --host 127.0.0.50 --port 7000
+```
 
-## Using the UI
+Open **http://127.0.0.50:7000** and log in with your admin credentials.
 
-- Add rows for: subnet, user, password
-- Click "Save and Deploy"
-- You will be prompted for your sudo password (needed to write config, create users, restart service)
-- After deploy, the UI tests connectivity per user and shows a sample curl command
+## Running on a Production Server
+
+The UI performs privileged operations (write `/etc/danted.conf`, `useradd`, `systemctl restart danted`). On a real server run with one of these approaches:
+
+**Option A — Run as root (simplest)**
+
+```bash
+sudo python main.py
+```
+
+**Option B — Configure NOPASSWD sudoers**
+
+```bash
+sudo visudo
+# Add (replace <username> with your user):
+<username> ALL=(ALL) NOPASSWD: ALL
+```
+
+> [!NOTE]
+> In restricted environments (IDE sandbox, containers with `NoNewPrivs=1`) sudo is blocked at the kernel level and system operations will fail gracefully with a descriptive error. Profile state is still saved.
+
+## Using the Dashboard
+
+1. Log in with your admin credentials.
+2. Click **+ Add Row** to add a proxy configuration (subnet, username, password).
+3. Click **Deploy Configuration →** — you will be prompted for your sudo password.
+4. After deployment the app restarts `danted`, then tests each user's SOCKS5 connectivity and shows results.
 
 ## Prerequisites
 
-- Linux with sudo access
-- Dante server (danted) installed via your package manager
-- Python 3.11+ (virtualenv is created by `run.sh`)
+| Requirement | Notes |
+|---|---|
+| Linux (Ubuntu/Debian recommended) | Tested on Ubuntu 22.04+ |
+| Python 3.11+ | virtualenv recommended |
+| `danted` installed | e.g. `sudo apt install dante-server` |
+| `curl` | used for connectivity tests |
+| sudo access | required for config writes and service management |
 
 ## Environment Variables
 
-The UI reads these from the `.env` file:
+All variables are read from `.env` (see `.env.example`):
 
-- `ADMIN_USER` — UI login username
-- `ADMIN_PASS` — UI login password
+| Variable | Default | Description |
+|---|---|---|
+| `ADMIN_USER` | `admin` | Web UI login username |
+| `ADMIN_PASS` | `admin` | Web UI login password |
+| `DANTE_UI_SECRET` | `change-me-secret` | Session signing key — **must be changed in production** |
+| `APP_HOST` | `127.0.0.50` | Bind address |
+| `APP_PORT` | `7000` | Bind port |
 
-The Flask session secret is managed in code (can be overridden via `DANTE_UI_SECRET` env var if you really need to override it outside `.env`).
-
-## Important Notes
-
-- Writes state to `/etc/dante-ui.json` and manages `danted.conf` at `/etc/danted.conf`.
-- Managed Linux group is `danteproxy`; proxy users are added to it.
-- Default proxy port is `1080`.
-- Network/service operations require sudo.
-
-## Development
-
-- Flask version is pinned in `webui/requirements.txt`. The UI server code lives in `webui/app.py`.
-- Static assets and templates are under `webui/static/` and `webui/templates/`.
-
-### Project Structure
+## Project Structure
 
 ```
 simple-dantd/
-├─ webui/
-│  ├─ app.py               # Flask app
-│  ├─ requirements.txt     # Python deps
-│  ├─ static/style.css     # Styles
-│  ├─ templates/           # HTML templates
-│  └─ .asset/              # Screenshots (docs)
-├─ .env.example            # Copy to .env and set admin creds
-├─ .gitignore              # Ignore .venv, .env, caches
-├─ run.sh                  # One-command dev runner
-└─ README.md
+├── main.py                        # FastAPI app entry point
+├── pyproject.toml                 # Dependencies and pytest config
+├── .env.example                   # Environment variable template
+│
+├── src/
+│   ├── config/                    # Single source of truth — AppConfig (Pydantic BaseSettings)
+│   ├── schema/                    # Data contracts — ProxyEntry, TestResult, APIStateResponse
+│   ├── providers/                 # OS-level operations (subprocess, user management)
+│   │   ├── system.py              # run_cmd_async, sudo wrapper, network helpers
+│   │   └── user_manager.py        # ensure_user, delete_user, list_proxy_users
+│   ├── services/                  # Business logic
+│   │   ├── state.py               # Load/save profiles_data/profiles.json
+│   │   ├── dante.py               # Generate and write /etc/danted.conf
+│   │   └── deployment.py          # Orchestrates deploy + test flow
+│   └── api/
+│       └── routes.py              # FastAPI routes (login, dashboard, /save, /api/state)
+│
+├── web/
+│   ├── templates/                 # Jinja2 HTML templates
+│   │   ├── login.html
+│   │   ├── index.html             # Dashboard
+│   │   └── result.html            # Deployment results
+│   └── static/
+│       └── style.css              # Glassmorphic dark-mode CSS design system
+│
+├── tests/
+│   ├── conftest.py                # Shared fixtures
+│   ├── test_api/test_routes.py    # Route / auth tests
+│   ├── test_providers/test_system.py
+│   └── test_services/test_state.py
+│
+└── profiles_data/
+    └── profiles.json              # Persisted proxy configurations (auto-created)
 ```
+
+## Development
+
+```bash
+# Install with dev dependencies
+pip install -e ".[dev]"
+
+# Run all tests with coverage
+python -m pytest tests/ -v
+
+# Run the dev server with auto-reload
+uvicorn main:app --host 127.0.0.50 --port 7000 --reload
+```
+
+### Architecture
+
+The project follows **Clean Architecture** with a strict layered dependency model:
+
+```
+Config / Schema  ←  no local imports (foundation)
+    ↑
+Providers        ←  OS/external integrations only
+    ↑
+Services         ←  business logic, orchestrates providers
+    ↑
+API (routes)     ←  HTTP interface, calls services only
+```
+
+## API Reference
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/` | Dashboard (requires auth) |
+| `GET` | `/login` | Login page |
+| `POST` | `/login` | Submit credentials |
+| `GET` | `/logout` | Clear session |
+| `POST` | `/save` | Deploy configuration |
+| `GET` | `/api/state` | JSON state dump (subnets, users, entries) |
 
 ## License
 
