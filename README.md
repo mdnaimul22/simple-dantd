@@ -15,7 +15,6 @@ Configure subnets, manage Linux proxy users, deploy config, and verify connectiv
 <p>
   <a href="#quick-start">Quick Start</a> •
   <a href="#features">Features</a> •
-  <a href="#architecture">Architecture</a> •
   <a href="#project-structure">Structure</a> •
   <a href="#environment-variables">Config</a> •
   <a href="#api-reference">API</a>
@@ -34,7 +33,6 @@ Configure subnets, manage Linux proxy users, deploy config, and verify connectiv
 - **Live connectivity tests** — verifies each proxy user over `socks5h://` after deploy
 - **Session-persisted results** — deployment result page accessible via `GET /result` any time
 - **System diagnostics** — `/setup` page checks 8 installation requirements with live re-check
-- **Clean architecture** — Routes → Services → Providers → Schema (strict Pydantic models)
 
 ## Dashboard
 
@@ -161,40 +159,6 @@ sudo visudo
 | `DANTE_UI_SECRET` | `change-me-secret` | Session signing key — **change in production** |
 | `APP_HOST` | `127.0.0.50` | Bind address for the web server |
 | `APP_PORT` | `7000` | Bind port |
-
----
-
-## Architecture
-
-Data flows strictly in one direction:
-
-```
-HTTP Request
-    │
-    ▼
-Routes  (src/api/routes.py)
-│   Parse input → call ONE service → return dict / template
-│   Zero business logic. Zero provider imports.
-    │
-    ▼
-Services  (src/services/)
-│   state.py       — load/save profiles + get_proxy_users
-│   dante.py       — generate and write /etc/danted.conf
-│   deployment.py  — orchestrate full deploy + test flow
-│   setup.py       — installation checks + subnet discovery
-    │
-    ▼
-Providers  (src/providers/)
-│   system.py      — run_cmd_async, check_binary, check_group,
-│                    get_system_subnets, test_user_socks5
-│   user_manager.py — ensure_user, delete_user, list_proxy_users
-    │
-    ▼
-Schema  (src/schema/models.py)   ← shared by all layers
-    ProxyEntry · TestResult · SubnetSuggestion
-    CheckResult · SetupStatusResponse
-    TestUserRequest · TestUserResponse
-```
 
 ---
 
